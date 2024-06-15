@@ -1,0 +1,1 @@
+# Processamento_Paralelo_PROJ02
