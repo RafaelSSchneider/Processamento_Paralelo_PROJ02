@@ -5,68 +5,76 @@
 % avisar que um item novo foi criado e esta pronto para ser consumido
 
 -module(app). %define o nome do modulo que será usado
--export([start/0]). %permite chamar as funções por fora do arquivo
+-export([start/0, producer/2, consumer/1, buffer/0]). %permite chamar as funções por fora do arquivo
 
 start() ->
-    io:format("Started program!~n"),
-    MaxItems = 6,
-    Items = [], 
-    Producer_list = create_producer(Items, MaxItems),
-    Consumer_list = create_consumer(Items, Producer_list),
-    print_producer_list(Producer_list),
-    print_consumer_list(Consumer_list),
-    print_item_list(Items).
+    io:format("Programa iniciado!~n"),
+    BufferPid = spawn(?MODULE, buffer, []),
+    create_producers(Items, MaxItems),
+    create_consumers(Items, Producer_list).
 
 -record(item, {id, name}).
 
-producer(Items, MaxItems) ->
-    if 
-        length(Items) =< MaxItems -> 
-            timer:sleep(3500),
-            %NewItem = #item{name = "Item", id = erlang:unique_integer([positive])},
-            io:format("Item created!~n"),
-            producer([NewItem | Items], MaxItems);
-        length(Items) >= MaxItems -> 
-            receive
-                {consumer, _} -> 
-                    io:format("Item consumed!~n"),
-                    producer(Items, MaxItems)
+producer(BufferPid, Num) ->
+    receive
+        stop ->
+            io:format("Producer parando~n")
+        after 3500 ->
+            io:format("Produzindo item ~p~n", [N]),
+            BufferPid ! {produce, N},
+            producer(BufferPid, N + 1)
+    end.
+
+consumer(BufferPid) ->
+    receive
+        stop ->
+            io:format("Consumer parando~n")
+    after 7500 ->
+        BufferPid ! {consumer, self()},
+        receive
+            {item, none} ->
+                io:format("Buffer vazio, consumer esperando~n"),
+                consumer(BufferPid)
+            {item, Item} ->
+                io:format("Consumer ~p consumindo item ~p~n", [self(), Item]),
+                consumer(BufferPid)
+        end
+    end.
+
+buffer() ->
+    buffer([])
+
+buffer(Items) ->
+    receive
+        {produce, Item} ->
+            NewItems = Items ++ [Item],
+            io:format("Buffer recebeu item ~p, novo buffer: ~p~n", [Item, NewItems]),
+            buffer(newItems);
+        
+        {consume, ConsumerPid} ->
+            case Items of
+                [] ->
+                    io:format("Buffer vazio~n")
+                    ConsumerPid ! {item, none},
+                    buffer(Items);
+                [Head | Tail] ->
+                    io:format("Buffer sending item ~p to consumer ~n", [Head]),
+                    ConsumerPid ! {item, Head},
+                    buffer(Tail)
             end
-    end,
-    timer:sleep(1000),
-    producer(Items, MaxItems).
+    end.
 
+% Cria 2 produtores
+create_producers(BufferPid) ->
+    spawn(?MODULE, producer, [BufferPid, 1]),
+    spawn(?MODULE, producer, [BufferPid, 222]).
 
-consumer(Items, Producer_list) ->
-    if 
-        length(Items) > 0 -> 
-            io:format("Consuming item...~n"),
-            timer:sleep(7500),
-            %Items = lists:delete(Items, 1),
-            io:format("Item consumed!~n"),
-            producer ! {self(), "producer"},
-            consumer(Items, Producer_list);
-        length(Items) =< 0 ->
-            io:format("No items to consume!~n"),
-            timer:sleep(3500),
-            consumer(Items, Producer_list)
-    end,
-    timer:sleep(1000),
-    consumer(Items, Producer_list).
-
-
-% create and print functions
-
-
-create_producer(Items, MaxItems) ->
-    Producer_list = [spawn(fun() -> producer(Items, MaxItems) end) || _ <- lists:seq(1, 4)], %cria 2 produtores
-    io:format("Producer created~n"),
-    Producer_list.
-
-create_consumer(Items, Producer_list) ->
-    Consumer_list = [spawn(fun() -> consumer(Items, Producer_list) end) || _ <- lists:seq(1, 4)], %cria 4 consumidores
-    io:format("Consumer created~n"),
-    Consumer_list.
+% Cria 4 consumidores
+create_consumers(BufferPid) ->
+    spawn(?MODULE, consumer, BufferPid),
+    spawn(?MODULE, consumer, BufferPid),
+    spawn(?MODULE, consumer, BufferPid),
+    spawn(?MODULE, consumer, BufferPid).
 
 print_producer_list(Producer_list) ->
     io:format("Producer list: ~p~n", [Producer_list]).
