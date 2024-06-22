@@ -5,7 +5,7 @@
 % avisar que um item novo foi criado e esta pronto para ser consumido
 
 -module(app). %define o nome do modulo que será usado
--export([start/0, producer/2, consumer/1, buffer/0]). %permite chamar as funções por fora do arquivo
+-export([start/0, number_producer/1, consumer/1, buffer/0, buffer/1]). %permite chamar as funções por fora do arquivo
 
 start() ->
     io:format("Programa iniciado!~n"),
@@ -13,14 +13,15 @@ start() ->
     create_producers(BufferPid),
     create_consumers(BufferPid).
 
-producer(BufferPid, Num) ->
+number_producer(BufferPid) ->
     receive
         stop ->
             io:format("Producer parando~n")
         after 3500 ->
-            io:format("Producer ~n produzindo item ~p~n", [self(), Num]),
-            BufferPid ! {produce, Num},
-            producer(BufferPid, Num + 1)
+            RandomNum = rand:uniform(256),
+            io:format("Producer de numeros ~p ~n produzindo item ~p~n", [self(), RandomNum]),
+            BufferPid ! {produce, RandomNum},
+            number_producer(BufferPid)
     end.
 
 consumer(BufferPid) ->
@@ -46,8 +47,9 @@ buffer() ->
 buffer(Items) ->
     receive
         {produce, Item} ->
-            io:format("Buffer recebeu item ~p, novo buffer: ~p~n", [Item, Items ++ [Item]]),
-            buffer(Items ++ [Item]);
+            NewItems = Items ++ [Item],
+            io:format("Buffer recebeu item ~p, novo buffer: ~w~n", [Item, NewItems]),
+            buffer(NewItems);
         
         {consume, ConsumerPid} ->
             io:format("Consumer ~p solicitou para consumir um item~n", [ConsumerPid]),
@@ -65,8 +67,8 @@ buffer(Items) ->
 
 % Cria 2 produtores
 create_producers(BufferPid) ->
-    spawn(?MODULE, producer, [BufferPid, 1]),
-    spawn(?MODULE, producer, [BufferPid, 222]).
+    spawn(?MODULE, number_producer, [BufferPid]),
+    spawn(?MODULE, number_producer, [BufferPid]).
 
 % Cria 4 consumidores
 create_consumers(BufferPid) ->
