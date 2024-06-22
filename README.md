@@ -6,4 +6,4 @@ Trabalho com utilização de Erlang para criar um sistema que simule a implement
 
 ![Screenshot_1](https://github.com/RafaelSSchneider/Processamento_Paralelo_PROJ02/assets/20550252/5a16a19f-65d3-40fe-b093-ef93ad8fd8e5)
 
-(podendo mudar o diagrama)
+Podemos usar uma recursividade para iniciar a lista, caso os producer consigam lotar a fila, deixamos eles aguardando uma mensagem com o sistema de mensagem do erlang falando que um produto foi consumido, essa mensagem será enviado do consumer, 
