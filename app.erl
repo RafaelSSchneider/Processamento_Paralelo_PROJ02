@@ -1,11 +1,5 @@
-%precisamos arrumar a forma de deletar o item da lista de itens
-%enviar a lista atualizada através de mensagens para os consumidores
-% consumidores precisam enviar mensagem aos produtoes disponiveis
-% podemos adicionar um receive nos consumidores esperando um produtor
-% avisar que um item novo foi criado e esta pronto para ser consumido
-
--module(app). %define o nome do modulo que será usado
--export([start/0, number_producer/1, string_producer/1, consumer/1, buffer/0, buffer/1]). %permite chamar as funções por fora do arquivo
+-module(app).
+-export([start/0, number_producer/1, string_producer/1, consumer/1, buffer/0, buffer/1, get_time_to_sleep/1]).
 
 start() ->
     io:format("Programa iniciado!~n"),
@@ -14,91 +8,69 @@ start() ->
     create_consumers(BufferPid).
 
 number_producer(BufferPid) ->
-    receive
-        stop ->
-            io:format("Producer parando~n")
-        after 3500 ->
-            RandomNum = rand:uniform(256),
-            io:format("Producer de numeros ~p produzindo item ~p~n", [self(), RandomNum]),
-            BufferPid ! {produce, RandomNum},
-            number_producer(BufferPid)
-    end.
+    io:format("Producer de numeros ~p produzindo novo item~n", [self()]),
+    timer:sleep(3500),
+    RandomNum = rand:uniform(256),
+    BufferPid ! {produce, RandomNum},
+    number_producer(BufferPid).
 
 string_producer(BufferPid) ->
-    receive
-        stop ->
-            io:format("Producer parando~n")
-        after 3500 ->
-            RandomString = generate_random_string(),
-            io:format("Producer de strings ~p produzindo item ~s~n", [self(), RandomString]),
-            BufferPid ! {produce, RandomString},
-            string_producer(BufferPid)
-    end.
+    io:format("Producer de strings ~p produzindo novo item~n", [self()]),
+    timer:sleep(7000),
+    RandomString = generate_random_string(),
+    BufferPid ! {produce, RandomString},
+    string_producer(BufferPid).
 
 consumer(BufferPid) ->
+    BufferPid ! {consume, self()},
     receive
-        stop ->
-            io:format("Consumer parando~n")
-        after 7500 ->
-            io:format("Consumer ~p consumindo~n", [self()]),
-            TypeToConsume = case(rand:uniform(2)) of
-                              1 -> num;
-                              2 -> str
-                            end,
-            BufferPid ! {consume, TypeToConsume, self()},
-            receive
-                {item, none} ->
-                    io:format("Buffer vazio, consumer esperando~n"),
-                    consumer(BufferPid);
-                {item, Item} ->
-                    io:format("Consumer ~p consumiu item ~p~n", [self(), Item]),
-                    consumer(BufferPid)
-            end
+        {item, none} ->
+            io:format("Consumer ~p tentou consumir mas o buffer estava vazio~n", [self()]),
+            timer:sleep(1000),
+            consumer(BufferPid);
+        {item, {Type, Value}} ->
+            io:format("Item do tipo ~p sendo consumido pelo consumer ~p~n", [Type, self()]),
+            TimeToSleep = get_time_to_sleep({Type, Value}),
+            timer:sleep(TimeToSleep),
+            io:format("Consumer ~p consumiu item ~p~n", [self(), Value]),
+            consumer(BufferPid)
     end.
 
 buffer() ->
-    buffer({[], []}).
+    buffer([]).
 
-buffer({NumList, StrList}) ->
+buffer(List) ->
     receive
         {produce, Str} when is_list(Str) ->
-            NewStrList = StrList ++ [Str],
-            io:format("Buffer recebeu item do tipo str ~s, novo buffer de strings: ~s~n", [Str, NewStrList]),
-            buffer({NumList, NewStrList});
+            NewList = List ++ [{big, Str}],
+            io:format("Buffer recebeu item do tipo str ~s, novo buffer: ~p~n", [Str, NewList]),
+            buffer(NewList);
 
         {produce, Num} when is_integer(Num) ->
-            NewNumList = NumList ++ [Num],
-            io:format("Buffer recebeu item do tipo num ~w, novo buffer de numeros: ~w~n", [Num, NewNumList]),
-            buffer({NewNumList, StrList});
-        
-        {consume, num, ConsumerPid} ->
-            io:format("Consumer ~p solicitou para consumir um item~n", [ConsumerPid]),
-            case NumList of
-                [] ->
-                    io:format("Buffer vazio~n"),
-                    ConsumerPid ! {item, none},
-                    buffer({NumList, StrList});
-                [Head | Tail] ->
-                    io:format("Item ~p sendo consumido pelo consumer ~p~n", [Head, ConsumerPid]),
-                    ConsumerPid ! {item, Head},
-                    buffer({Tail, StrList})
-            end;
+            NewList = List ++ [{small, Num}],
+            io:format("Buffer recebeu item do tipo num ~w, novo buffer: ~p~n", [Num, NewList]),
+            buffer(NewList);
 
-        {consume, str, ConsumerPid} -> 
-            io:format("Consumer ~p solicitou para consumir um item~n", [ConsumerPid]),
-            case StrList of
+        {consume, ConsumerPid} ->
+            ConsumerPid ! pause,
+            case List of
                 [] ->
-                    io:format("Buffer vazio~n"),
                     ConsumerPid ! {item, none},
-                    buffer({NumList, StrList});
+                    buffer(List);
                 [Head | Tail] ->
-                    io:format("Item ~s sendo consumido pelo consumer ~p~n", [Head, ConsumerPid]),
                     ConsumerPid ! {item, Head},
-                    buffer({NumList, Tail})
+                    buffer(Tail)
             end
     end.
 
-% Cria 2 produtores
+get_time_to_sleep({Type, _Value}) ->
+    TimeToSleep = case Type of
+        big -> 15000;
+        small -> 7000
+    end,
+    TimeToSleep.
+
+% Cria 2 produtores de tipos diferentes
 create_producers(BufferPid) ->
     spawn(?MODULE, number_producer, [BufferPid]),
     spawn(?MODULE, string_producer, [BufferPid]).
@@ -114,8 +86,3 @@ generate_random_string() ->
     Integer = rand:uniform(26),  % Números de 1 a 26 (para letras de A a Z)
     integer_to_list(64 + Integer).
 
-%% print_producer_list(Producer_list) -> io:format("Producer list: ~p~n", [Producer_list]).
-
-%% print_consumer_list(Consumer_list) -> io:format("Consumer list: ~p~n", [Consumer_list]).
-
-%% print_item_list(Items) -> io:format("List length: ~p~n", [length(Items)]), io:format("Item list: ~p~n", [Items]).
