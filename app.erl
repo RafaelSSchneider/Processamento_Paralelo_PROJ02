@@ -65,8 +65,8 @@ buffer(List) ->
 
 get_time_to_sleep({Type, _Value}) ->
     TimeToSleep = case Type of
-        big -> 7000;
-        small -> 15000
+        big -> 15000;
+        small -> 7000
     end,
     TimeToSleep.
 
