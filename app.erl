@@ -1,5 +1,5 @@
 -module(app).
--export([start/0, number_producer/1, string_producer/1, consumer/1, buffer/0, buffer/1, get_time_to_sleep/1]).
+-export([start/0, integer_producer/1, float_producer/1, consumer/1, buffer/0, buffer/1, get_time_to_sleep/1]).
 
 start() ->
     io:format("Programa iniciado!~n"),
@@ -7,19 +7,19 @@ start() ->
     create_producers(BufferPid),
     create_consumers(BufferPid).
 
-number_producer(BufferPid) ->
-    io:format("Producer de numeros ~p produzindo novo item~n", [self()]),
+integer_producer(BufferPid) ->
+    io:format("Producer de inteiros ~p produzindo novo item~n", [self()]),
     timer:sleep(3500),
-    RandomNum = rand:uniform(256),
-    BufferPid ! {produce, RandomNum},
-    number_producer(BufferPid).
+    RandomInt = rand:uniform(256),
+    BufferPid ! {produce, RandomInt},
+    integer_producer(BufferPid).
 
-string_producer(BufferPid) ->
-    io:format("Producer de strings ~p produzindo novo item~n", [self()]),
+float_producer(BufferPid) ->
+    io:format("Producer de floats ~p produzindo novo item~n", [self()]),
     timer:sleep(7000),
-    RandomString = generate_random_string(),
-    BufferPid ! {produce, RandomString},
-    string_producer(BufferPid).
+    RandomFloat = rand:uniform(),
+    BufferPid ! {produce, RandomFloat},
+    float_producer(BufferPid).
 
 consumer(BufferPid) ->
     BufferPid ! {consume, self()},
@@ -41,14 +41,14 @@ buffer() ->
 
 buffer(List) ->
     receive
-        {produce, Str} when is_list(Str) ->
-            NewList = List ++ [{big, Str}],
-            io:format("Buffer recebeu item do tipo str ~s, novo buffer: ~p~n", [Str, NewList]),
+        {produce, Float} when is_float(Float) ->
+            NewList = List ++ [{big, Float}],
+            io:format("Buffer recebeu item do tipo Float ~w, novo buffer: ~p~n", [Float, NewList]),
             buffer(NewList);
 
-        {produce, Num} when is_integer(Num) ->
-            NewList = List ++ [{small, Num}],
-            io:format("Buffer recebeu item do tipo num ~w, novo buffer: ~p~n", [Num, NewList]),
+        {produce, Int} when is_integer(Int) ->
+            NewList = List ++ [{small, Int}],
+            io:format("Buffer recebeu item do tipo Int ~w, novo buffer: ~p~n", [Int, NewList]),
             buffer(NewList);
 
         {consume, ConsumerPid} ->
@@ -72,8 +72,8 @@ get_time_to_sleep({Type, _Value}) ->
 
 % Cria 2 produtores de tipos diferentes
 create_producers(BufferPid) ->
-    spawn(?MODULE, number_producer, [BufferPid]),
-    spawn(?MODULE, string_producer, [BufferPid]).
+    spawn(?MODULE, integer_producer, [BufferPid]),
+    spawn(?MODULE, float_producer, [BufferPid]).
 
 % Cria 4 consumidores
 create_consumers(BufferPid) ->
@@ -81,8 +81,4 @@ create_consumers(BufferPid) ->
     spawn(?MODULE, consumer, [BufferPid]),
     spawn(?MODULE, consumer, [BufferPid]),
     spawn(?MODULE, consumer, [BufferPid]).
-
-generate_random_string() ->
-    Integer = rand:uniform(26),  % Números de 1 a 26 (para letras de A a Z)
-    integer_to_list(64 + Integer).
 
